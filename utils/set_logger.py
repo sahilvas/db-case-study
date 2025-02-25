@@ -1,17 +1,22 @@
 import os
 import logging
 
-def set_logger(logs_directory: str = "../logs/", output_directory: str = "../output/", 
-               check_directories: bool = True, script_log_identifier: str = "demo_script"):
+def set_logger(check_directories: bool = True, script_log_identifier: str = "demo_script"):
     """
     Sets up logging configuration and ensures directories exist if check_directories is True.
     
     Args:
-        logs_directory (str): The directory for log files.
-        output_directory (str): The directory for output files.
         check_directories (bool): Flag to check and create directories.
         script_log_identifier (str): Identifier used in log formatting.
     """
+    # Get the directory where bin/utils is located
+    base_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    print(f"Base directory: {base_dir}")
+
+    # Set default paths relative to bon/utils if not provided
+    logs_directory = os.path.join(base_dir, "logs")
+    output_directory = os.path.join(base_dir, "output")
+
     # Check if directories exist and create them if check_directories is True
     if check_directories:
         if not os.path.exists(logs_directory):

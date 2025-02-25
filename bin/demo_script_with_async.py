@@ -1,4 +1,3 @@
-import requests
 from bs4 import BeautifulSoup
 import csv
 import plotly.graph_objects as go
@@ -7,6 +6,8 @@ import time
 import logging
 import argparse
 import sys, os
+import aiohttp
+import asyncio
 
 # Get the directory where bin/utils is located
 base_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -49,7 +50,7 @@ logs_directory = os.path.join(base_dir, "logs")
 output_directory = os.path.join(base_dir, "output")
 
 # Global constants
-script_log_identifier = "demo_script"
+script_log_identifier = "demo_script_async"
 log_filename = logs_directory + script_log_identifier + ".log"
 valid_links_csv_filename = output_directory + "/valid_links.csv"
 keyword_stats_csv_filename = output_directory + "/keyword_stats.csv"
@@ -57,35 +58,35 @@ valid_links_html_filename = output_directory + "/valid_links_graphs.html"
 keyword_stats_html_filename = output_directory + "/keyword_stats_graphs.html"
 
 # Call set_logger with default settings (check directories and use default script identifier)
-logger = set_logger()
+logger = set_logger(True, script_log_identifier)
 
-def check_http_status(url):
-    """Checks the HTTP status of a URL."""
-    try:
-        logger.debug(f"Checking status for URL: {url}")
-        response = requests.get(url, timeout=TIMEOUT)
-        return response.status_code
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error fetching {url}: {e}")
-        return None
-
-
-def get_hrefs(url):
-    """Extracts href links from a URL and filters for http/https links."""
+# Modify the existing `get_hrefs` function to use aiohttp
+async def get_hrefs(session, url):
+    """Asynchronously extract href links from a URL."""
     try:
         logger.debug(f"Extracting hrefs from: {url}")
-        response = requests.get(url, timeout=TIMEOUT)
-        soup = BeautifulSoup(response.text, "html.parser")
-        href_links = [a['href'] for a in soup.find_all('a', href=True)]
-        # Filter for links starting with http or https
-        valid_links = [link for link in href_links if link.startswith("http")]
-        logger.debug(f"Found {len(valid_links)} valid links in {url}")
-        return valid_links[:10]  # Get first 10 links
+        async with session.get(url, timeout=TIMEOUT) as response:
+            soup = BeautifulSoup(await response.text(), "html.parser")
+            href_links = [a['href'] for a in soup.find_all('a', href=True)]
+            valid_links = [link for link in href_links if link.startswith("http")]
+            logger.debug(f"Found {len(valid_links)} valid links in {url}")
+            return valid_links[:10]  # Get the first 10 links
     except Exception as e:
         logger.error(f"Error extracting links from {url}: {e}")
         return []
 
+# Modify the `check_http_status` function to use aiohttp
+async def check_http_status(session, url):
+    """Asynchronously checks the HTTP status of a URL."""
+    try:
+        logger.debug(f"Checking status for URL: {url}")
+        async with session.get(url, timeout=TIMEOUT) as response:
+            return response.status
+    except aiohttp.ClientError as e:
+        logger.error(f"Error fetching {url}: {e}")
+        return None
 
+# Modify `check_keywords_in_page` function to remain synchronous since it's just processing text
 def check_keywords_in_page(content, keyword_sets):
     """Checks for keyword sets on a given page."""
     content = content.lower()
@@ -98,6 +99,55 @@ def check_keywords_in_page(content, keyword_sets):
 
     return keyword_set_counts
 
+# Update the `process_links_and_keywords` function to work asynchronously
+async def process_links_and_keywords(urls, keyword_sets):
+    """Main processing function for extracting links, checking validity, and analyzing keywords asynchronously."""
+    valid_links_info = []
+    keyword_set_counts_per_link = {}
+
+    # Use aiohttp session for asynchronous requests
+    async with aiohttp.ClientSession() as session:
+        # Create tasks for URL processing
+        tasks = []
+        for url in urls:
+            tasks.append(process_url(session, url, keyword_sets, valid_links_info, keyword_set_counts_per_link))
+
+        # Run tasks concurrently
+        await asyncio.gather(*tasks)
+
+    return valid_links_info, keyword_set_counts_per_link
+
+# This function handles processing for each URL in the list asynchronously
+async def process_url(session, url, keyword_sets, valid_links_info, keyword_set_counts_per_link):
+    """Asynchronously process a single URL."""
+    logger.info(f"Processing URL: {url}")
+    valid_links = await get_hrefs(session, url)
+    total_keyword_set_count = Counter()
+
+    # Create tasks to process each link concurrently
+    tasks = []
+    for link in valid_links:
+        tasks.append(process_link(session, url, link, keyword_sets, valid_links_info, total_keyword_set_count))
+
+    # Wait for link processing to complete
+    await asyncio.gather(*tasks)
+
+    # Store the total keyword set count for the main URL (including sub-links)
+    keyword_set_counts_per_link[url] = total_keyword_set_count
+
+# Asynchronously process each individual link
+async def process_link(session, url, link, keyword_sets, valid_links_info, total_keyword_set_count):
+    """Asynchronously process an individual link."""
+    status_code = await check_http_status(session, link)
+    status = "Valid" if status_code == 200 else "Invalid"
+    valid_links_info.append([url, link, status])
+
+    if status == "Valid":
+        # If valid, check for keyword sets in the link's page
+        async with session.get(link, timeout=TIMEOUT) as response:
+            page_content = await response.text()
+            keyword_set_counts = check_keywords_in_page(page_content, keyword_sets)
+            total_keyword_set_count.update(keyword_set_counts)
 
 def save_valid_links_to_csv(valid_links_info):
     """Saves the valid link information to a CSV file."""
@@ -190,42 +240,13 @@ def plot_keyword_frequency_graph(keyword_freq_per_link):
 
     return fig
 
-
-def process_links_and_keywords(urls, keyword_sets):
-    """Main processing function for extracting links, checking validity, and analyzing keywords."""
-    valid_links_info = []
-    keyword_set_counts_per_link = {}
-
-    for url in urls:
-        logger.info(f"Processing URL: {url}")
-        valid_links = get_hrefs(url)
-        total_keyword_set_count = Counter()
-
-        for link in valid_links:
-            status_code = check_http_status(link)
-            status = "Valid" if status_code == 200 else "Invalid"
-            valid_links_info.append([url, link, status])
-
-            if status == "Valid":
-                # If valid, check for keyword sets in the link's page
-                response = requests.get(link, timeout=TIMEOUT)
-                page_content = response.text.lower()
-                keyword_set_counts = check_keywords_in_page(page_content, keyword_sets)
-                total_keyword_set_count.update(keyword_set_counts)
-
-        # Store the total keyword set count for the main URL (including sub-links)
-        keyword_set_counts_per_link[url] = total_keyword_set_count
-
-    return valid_links_info, keyword_set_counts_per_link
-
-
 def main():
     """Main function to execute the full script."""
 
     try:
         # Start time
         start_time = time.time()
-        
+
         # Parse command-line arguments
         parser = argparse.ArgumentParser(description="Process URLs and analyze keywords.")
         parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
@@ -242,7 +263,9 @@ def main():
 
         # Process links and keywords
         try:
-            valid_links_info, keyword_set_counts_per_link = process_links_and_keywords(urls, keyword_sets)
+            # Run the asynchronous function
+            valid_links_info, keyword_set_counts_per_link = asyncio.run(process_links_and_keywords(urls, keyword_sets))
+            
         except Exception as e:
             logger.error(f"Error processing links and keywords: {str(e)}")
             raise
