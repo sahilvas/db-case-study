@@ -203,6 +203,13 @@ A bar graph showing the frequency of keyword sets across the URLs.
 - The script uses `set_logger` from the `utils/set_logger.py` file to configure logging.
 - The logging verbosity can be controlled by the `--verbose` flag.
 
+
+## Future Enhancements
+
+- **Improve Error Handling:** Implement more granular exception handling for specific request failures, such as rate limits, captchas, or blocked access.
+- **Parallel Processing:** Use asynchronous requests (e.g., asyncio with aiohttp) or threading to speed up URL fetching and keyword analysis.
+- **Enhanced Link Filtering:** Improve link extraction by filtering out duplicate, irrelevant, or non-informative links (e.g., navigation links, social media buttons).
+
 ## License
 
 This project is licensed under the ...
