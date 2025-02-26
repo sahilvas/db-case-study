@@ -93,6 +93,29 @@ python bin/demo_script.py --verbose
 
 This will display debug-level logs, which can be helpful for debugging or understanding the flow of the script.
 
+### Run using docker
+
+You can also run the script in a container by building the image and then running it
+Please check the Dockerfile and update as needed
+
+```
+docker build -t demo_python_app . 
+docker run --rm -t demo_python_app
+```
+
+To run it inside docker container with arguments for debugging
+
+```
+docker run --rm demo_python_app python bin/demo_script_with_async.py --verbose
+```
+
+Also, you can run it using docker-compose locally with one command
+
+```
+docker-compose up --build
+```
+
+
 ### Generated Files
 
 1. **Valid Links CSV**: 

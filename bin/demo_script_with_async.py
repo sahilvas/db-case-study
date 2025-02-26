@@ -36,11 +36,11 @@ urls = [
 
 # List of Keyword Sets (List 2)
 keyword_sets = [
-    {"Sanctions", "OFAC"},
-    {"Foreign Sanctions", "Balkans"},
-    {"ESG trends", "Corporate income tax"},
-    {"European Parliament", "customs fraud"},
-    {"Cybersecurity", "OLAF"},
+    {"Sanctions"}, {"OFAC"},
+    {"Foreign Sanctions"}, {"Balkans"},
+    {"ESG trends"}, {"Corporate income tax"},
+    {"European Parliament"}, {"customs fraud"},
+    {"Cybersecurity"}, {"OLAF"},
     {"Device Fingerprinting"}
 ]
 
@@ -51,7 +51,6 @@ output_directory = os.path.join(base_dir, "output")
 
 # Global constants
 script_log_identifier = "demo_script_async"
-log_filename = logs_directory + script_log_identifier + ".log"
 valid_links_csv_filename = output_directory + "/valid_links.csv"
 keyword_stats_csv_filename = output_directory + "/keyword_stats.csv"
 valid_links_html_filename = output_directory + "/valid_links_graphs.html"
@@ -71,10 +70,13 @@ async def get_hrefs(session, url):
             valid_links = [link for link in href_links if link.startswith("http")]
             logger.debug(f"Found {len(valid_links)} valid links in {url}")
             return valid_links[:10]  # Get the first 10 links
+    except asyncio.TimeoutError as e:
+        logger.error(f"Timeout error extracting links from {url}")
+        return []
     except Exception as e:
         logger.error(f"Error extracting links from {url}: {e}")
-        return []
-
+        return []    
+    
 # Modify the `check_http_status` function to use aiohttp
 async def check_http_status(session, url):
     """Asynchronously checks the HTTP status of a URL."""
@@ -88,14 +90,15 @@ async def check_http_status(session, url):
 
 # Modify `check_keywords_in_page` function to remain synchronous since it's just processing text
 def check_keywords_in_page(content, keyword_sets):
-    """Checks for keyword sets on a given page."""
+    """Checks for individual keywords on a given page."""
     content = content.lower()
     keyword_set_counts = Counter()
 
     for keyword_set in keyword_sets:
-        keyword_set_lower = {kw.lower() for kw in keyword_set}
-        if any(keyword in content for keyword in keyword_set_lower):
-            keyword_set_counts[tuple(keyword_set)] += 1
+        for keyword in keyword_set:
+            keyword_lower = keyword.lower()
+            if keyword_lower in content:
+                keyword_set_counts[tuple(keyword_set)] += 1
 
     return keyword_set_counts
 
@@ -221,7 +224,7 @@ def plot_keyword_frequency_graph(keyword_freq_per_link):
 
     # Highlight the URL with the highest and lowest frequency
     fig.add_annotation(
-        x=max_url, y=max(sorted_freqs),
+        x=sorted_freqs[0], y=sorted_urls[0],
         text=f"Highest: {max_url}",
         showarrow=True,
         arrowhead=2,
@@ -229,7 +232,7 @@ def plot_keyword_frequency_graph(keyword_freq_per_link):
     )
 
     fig.add_annotation(
-        x=min_url, y=min(sorted_freqs),
+        x=sorted_freqs[-1], y=sorted_urls[-1],
         text=f"Lowest: {min_url}",
         showarrow=True,
         arrowhead=2,

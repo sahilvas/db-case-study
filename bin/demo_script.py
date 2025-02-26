@@ -35,11 +35,11 @@ urls = [
 
 # List of Keyword Sets (List 2)
 keyword_sets = [
-    {"Sanctions", "OFAC"},
-    {"Foreign Sanctions", "Balkans"},
-    {"ESG trends", "Corporate income tax"},
-    {"European Parliament", "customs fraud"},
-    {"Cybersecurity", "OLAF"},
+    {"Sanctions"}, {"OFAC"},
+    {"Foreign Sanctions"}, {"Balkans"},
+    {"ESG trends"}, {"Corporate income tax"},
+    {"European Parliament"}, {"customs fraud"},
+    {"Cybersecurity"}, {"OLAF"},
     {"Device Fingerprinting"}
 ]
 
@@ -50,7 +50,6 @@ output_directory = os.path.join(base_dir, "output")
 
 # Global constants
 script_log_identifier = "demo_script"
-log_filename = logs_directory + script_log_identifier + ".log"
 valid_links_csv_filename = output_directory + "/valid_links.csv"
 keyword_stats_csv_filename = output_directory + "/keyword_stats.csv"
 valid_links_html_filename = output_directory + "/valid_links_graphs.html"
@@ -87,14 +86,15 @@ def get_hrefs(url):
 
 
 def check_keywords_in_page(content, keyword_sets):
-    """Checks for keyword sets on a given page."""
+    """Checks for individual keywords on a given page."""
     content = content.lower()
     keyword_set_counts = Counter()
 
     for keyword_set in keyword_sets:
-        keyword_set_lower = {kw.lower() for kw in keyword_set}
-        if any(keyword in content for keyword in keyword_set_lower):
-            keyword_set_counts[tuple(keyword_set)] += 1
+        for keyword in keyword_set:
+            keyword_lower = keyword.lower()
+            if keyword_lower in content:
+                keyword_set_counts[tuple(keyword_set)] += 1
 
     return keyword_set_counts
 

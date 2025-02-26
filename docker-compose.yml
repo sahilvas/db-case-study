@@ -1,0 +1,11 @@
+version: "3.8"
+
+services:
+  python_app:
+    build: .
+    container_name: demo_python_app
+    volumes:
+      - .:/app 
+    working_dir: /app
+    command: python bin/demo_script_with_async.py
+    tty: true  
